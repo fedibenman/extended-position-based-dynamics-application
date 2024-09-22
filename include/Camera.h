@@ -19,6 +19,10 @@ public:
 	glm::vec3 Orientation = glm::vec3(0.0f, 0.0f, -1.0f);
 	glm::vec3 Up = glm::vec3(0.0f, 1.0f, 0.0f);
 	glm::mat4 cameraMatrix = glm::mat4(1.0f);
+	float radius ; 
+	double phi ; 
+	double theta ;
+	glm::mat4 View ; 
 
 	// Prevents the camera from jumping around when first clicking left click
 	bool firstClick = true;
