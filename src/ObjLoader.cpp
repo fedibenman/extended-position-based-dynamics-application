@@ -21,8 +21,8 @@
             glm::vec3 vertex;
                 iss >> vertex.x >> vertex.y >> vertex.z;
 // print the vertex variable
-
-                vertices.push_back(vertex);
+            vertices.push_back(vertex);
+            particles.push_back({ {vertex.x, vertex.y, vertex.z}, {0.0f, 0.0f, 0.0f}, 1.0f });  // Create particles with invMass
             }
             else if (prefix == "vt") {
                 glm::vec2 texCoord;
@@ -35,13 +35,30 @@
             //     normals.push_back(normal);
             // }
             else if (prefix == "f") {
-                unsigned int vertexIndex[3], texCoordIndex[3], normalIndex[3];
-                char slash;
-                for (int i = 0; i < 3; i++) {
-                    iss >> vertexIndex[i] >> slash >> texCoordIndex[i] >> slash >> normalIndex[i];
-                    indices.push_back(vertexIndex[i] - 1);  // OBJ indices start at 1
-                }
+            unsigned int vertexIndex[4], texCoordIndex[4], normalIndex[4]; // Arrays for indices
+            char slash;
+            for (int i = 0; i < 4; i++) {
+                iss >> vertexIndex[i] >> slash >> texCoordIndex[i] >> slash >> normalIndex[i];
+                // Store the vertex index in the indices array, converting to 0-based index
+                // indices.push_back(vertexIndex[i] - 1);
             }
+                indices.push_back(vertexIndex[0] - 1);
+                indices.push_back(vertexIndex[1] - 1);
+                indices.push_back(vertexIndex[2] - 1);
+
+    // Triangle 2: v0, v2, v3
+                indices.push_back(vertexIndex[0] - 1);
+                indices.push_back(vertexIndex[2] - 1);
+                indices.push_back(vertexIndex[3] - 1);
+
+            for (int i = 0  ; i < 4 ; i++) {
+            std::cout << "vertexIndex" << vertexIndex[i] << std::endl;
+                
+            }
+            // Create tetrahedron and its edges
+            // tetrahedrons.push_back(tetrahedron{ {vertexIndex[0], vertexIndex[1], vertexIndex[2], vertexIndex[3]}, calculateVolume(vertexIndex) });
+            // createEdges(vertexIndex);  // This will handle edge creation
+        }
         }
     }
 
@@ -53,7 +70,6 @@ ObjLoader::ObjLoader(const std::string& filepath) {
     
     // Initialize the object's position above the ground
     position = glm::vec3(0.0f, 10.0f, 0.0f); // Start 10 units above the ground
-    velocity = glm::vec3(0.0f, 0.0f, 0.0f);  // Initial velocity
 }
 
 void ObjLoader::setupBuffers() {
@@ -96,7 +112,16 @@ void ObjLoader::setupBuffers() {
     // Unbind
     glBindVertexArray(0);
 }
-
+void ObjLoader::createEdges(unsigned int vertexIndex[4]) {
+    for(int i = 0 ; i< 4 ; i++)
+    std::cout << vertexIndex[i]<< std::endl;
+    edges.push_back({ {vertexIndex[0], vertexIndex[1]}, calculateRestLength(vertexIndex[0], vertexIndex[1]) });
+    edges.push_back({ {vertexIndex[0], vertexIndex[2]}, calculateRestLength(vertexIndex[0], vertexIndex[2]) });
+    edges.push_back({ {vertexIndex[0], vertexIndex[3]}, calculateRestLength(vertexIndex[0], vertexIndex[3]) });
+    edges.push_back({ {vertexIndex[1], vertexIndex[2]}, calculateRestLength(vertexIndex[1], vertexIndex[2]) });
+    edges.push_back({ {vertexIndex[1], vertexIndex[3]}, calculateRestLength(vertexIndex[1], vertexIndex[3]) });
+    edges.push_back({ {vertexIndex[2], vertexIndex[3]}, calculateRestLength(vertexIndex[2], vertexIndex[3]) });
+}
 
 
 void ObjLoader::draw(GLuint shaderProgram) {
@@ -115,15 +140,21 @@ void ObjLoader::draw(GLuint shaderProgram) {
 
 void ObjLoader::updatePhysics(float deltaTime) {
     // Apply gravity to the y-velocity
-    velocity.y += gravity * deltaTime;
+    for (Particle& particle : particles) {
+        particle.velocity[1] += gravity * deltaTime;  // Apply gravity to y-velocity
+        particle.position[0] += particle.velocity[0] * deltaTime;
+        particle.position[1] += particle.velocity[1] * deltaTime;
+        particle.position[2] += particle.velocity[2] * deltaTime;
+    }
 
-    // Update the position based on velocity
-    position += velocity * deltaTime;
+    // Solve stretch constraints (edges)
+    for (Edges& edge : edges) {
+        // solveStretchConstraint(particles[edge.indices[0]], particles[edge.indices[1]], edge.restLen);
+    }
 
-    // Check for collision with the ground
-    if (position.y <= groundLevel) {
-        position.y = groundLevel;  // Prevent the object from going below the ground
-        velocity.y = 0.0f;         // Reset the velocity to 0 when hitting the ground
+    // Solve volume constraints (tetrahedrons)
+    for (tetrahedron& tet : tetrahedrons) {
+        // solveVolumeConstraint(tet, deltaTime);
     }
 }
 
@@ -150,3 +181,24 @@ void ObjLoader::updatePhysics(float deltaTime) {
         glDeleteBuffers(1, &VBO);
         glDeleteBuffers(1, &EBO);
     }
+
+
+
+float ObjLoader::calculateRestLength(unsigned int index1, unsigned int index2) {
+    glm::vec3 v1 = vertices[index1];
+    glm::vec3 v2 = vertices[index2];
+    return glm::length(v2 - v1);
+}
+
+float ObjLoader::calculateVolume(unsigned int indices[4]) {
+    // Use determinant or other methods to calculate the volume of a tetrahedron
+    for (int i =0  ; i < 4 ; i++) {
+    std::cout << "indices" << indices[i]<< std::endl;}
+    glm::vec3 v0 = vertices[indices[0]];
+    glm::vec3 v1 = vertices[indices[1]];
+    glm::vec3 v2 = vertices[indices[2]];
+    glm::vec3 v3 = vertices[indices[3]];
+
+    glm::vec3 crossProduct = glm::cross(v1 - v0, v2 - v0);
+    return std::fabs(glm::dot(crossProduct, v3 - v0)) / 6.0f;
+}

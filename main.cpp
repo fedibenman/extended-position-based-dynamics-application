@@ -88,7 +88,7 @@ int main()
 
 	// Generates Shader object using shaders default.vert and default.frag
 	Shader shaderProgram("default.vert", "default.frag");
-	ObjLoader object("capsule.obj");
+	ObjLoader object("obj.obj");
 
 	// Generates Vertex Array Object and binds it
 	VAO VAO1;

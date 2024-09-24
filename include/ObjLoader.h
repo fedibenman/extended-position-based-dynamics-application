@@ -11,32 +11,30 @@
 #include <glm/gtc/type_ptr.hpp>
 
 struct Particle{
-float  postion[3] ;
+float  position[3] ;
 float velocity[3] ; 
 float invMass ; 
 }; 
 
 struct Edges{
-    int indices[2] ;
+    unsigned int indices[2] ;
     float restLen ; 
 } ; 
 
 struct tetrahedron{
-    int indices[4] ; 
+    unsigned int indices[4] ; 
     float restVolume ; 
 } ;  
 class ObjLoader {
  public:
     glm::vec3 position;
-    glm::vec3 velocity;
-    glm::vec3 force;
-    float mass;
-    float invMass;
     std::vector<glm::vec3> vertices;
     std::vector<glm::vec3> normals;
     std::vector<glm::vec2> texCoords;
     std::vector<unsigned int> indices;
-    float stiffness;  
+    std::vector<Particle> particles;
+    std::vector<Edges> edges;
+    std::vector<tetrahedron> tetrahedrons;
     float gravity = -9.81f; // Gravity constant
     float groundLevel = 0.0f; // Height of the flat surface (y = 0)
 
@@ -54,7 +52,10 @@ void updatePhysics(float deltaTime);
  void draw(GLuint shaderProgram)  ;
  
  void deleteBuffers() ;
-void solveDistanceConstraint( ObjLoader& obj2, float restLength, float compliance, float dt) ; 
+
+ float calculateRestLength(unsigned int index1, unsigned int index2) ;
+ float calculateVolume(unsigned int indices[4]) ;
+ void  createEdges(unsigned int vertexIndex[4])  ;
 } ;
 
 #endif
