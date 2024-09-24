@@ -88,7 +88,7 @@ int main()
 
 	// Generates Shader object using shaders default.vert and default.frag
 	Shader shaderProgram("default.vert", "default.frag");
-	ObjLoader object("obj.obj");
+
 
 	// Generates Vertex Array Object and binds it
 	VAO VAO1;
@@ -118,7 +118,7 @@ int main()
 	Texture popCat("texture.jpg", GL_TEXTURE_2D, GL_TEXTURE0, GL_RGBA, GL_UNSIGNED_BYTE);
 	popCat.texUnit(shaderProgram, "tex0", 0);
 
-
+	ObjLoader object("teapot.obj");
 
 	// Original code from the tutorial
 	/*Texture popCat("pop_cat.png", GL_TEXTURE_2D, GL_TEXTURE0, GL_RGBA, GL_UNSIGNED_BYTE);

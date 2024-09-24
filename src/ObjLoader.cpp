@@ -44,20 +44,20 @@
             }
                 indices.push_back(vertexIndex[0] - 1);
                 indices.push_back(vertexIndex[1] - 1);
-                indices.push_back(vertexIndex[2] - 1);
+                indices.push_back(vertexIndex[3] - 1);
 
     // Triangle 2: v0, v2, v3
-                indices.push_back(vertexIndex[0] - 1);
-                indices.push_back(vertexIndex[2] - 1);
-                indices.push_back(vertexIndex[3] - 1);
+                indices.push_back(vertexIndex[1] -1);
+                indices.push_back(vertexIndex[3] -1);
+                indices.push_back(vertexIndex[2] -1);
 
             for (int i = 0  ; i < 4 ; i++) {
             std::cout << "vertexIndex" << vertexIndex[i] << std::endl;
                 
             }
             // Create tetrahedron and its edges
-            // tetrahedrons.push_back(tetrahedron{ {vertexIndex[0], vertexIndex[1], vertexIndex[2], vertexIndex[3]}, calculateVolume(vertexIndex) });
-            // createEdges(vertexIndex);  // This will handle edge creation
+            tetrahedrons.push_back({ {vertexIndex[0], vertexIndex[1], vertexIndex[2], vertexIndex[3]}, calculateVolume(vertexIndex) });
+            createEdges(vertexIndex);
         }
         }
     }
