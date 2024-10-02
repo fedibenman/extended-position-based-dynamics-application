@@ -118,24 +118,24 @@ int main()
 	Texture popCat("texture.jpg", GL_TEXTURE_2D, GL_TEXTURE0, GL_RGBA, GL_UNSIGNED_BYTE);
 	popCat.texUnit(shaderProgram, "tex0", 0);
 
-	ObjLoader object("teapot.obj");
+	ObjLoader object("complexTetrahedral.obj");
 
 	// Original code from the tutorial
 	/*Texture popCat("pop_cat.png", GL_TEXTURE_2D, GL_TEXTURE0, GL_RGBA, GL_UNSIGNED_BYTE);
 	popCat.texUnit(shaderProgram, "tex0", 0);*/
-	float deltaTime = 0.0f;
-	float lastFrame = 0.0f;
+	const float deltaTime = 1.0f / 60.0f;
+	// float lastFrame = 0.0f;
 	glEnable(GL_DEPTH_TEST);
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 130");
 
-	Camera camera(width, height, glm::vec3(0.0f, 1.0f, 15.0f)); 
+	Camera camera(width, height, glm::vec3(0.0f, 5.0f, 15.0f)); 
 	// Main while loop
 	while (!glfwWindowShouldClose(window))
 	{
 		float currentFrame = glfwGetTime();
-    	deltaTime = currentFrame - lastFrame;
-    	lastFrame = currentFrame;
+    	// deltaTime = currentFrame - lastFrame;
+    	// lastFrame = currentFrame;
 		// Specify the color of the background
 		glClearColor(0.07f, 0.13f, 0.17f, 1.0f);
 		// Clean the back buffer and assign the new color to it
@@ -144,8 +144,9 @@ int main()
 		shaderProgram.Activate();
 				// Simple timer
 		object.updatePhysics(deltaTime);
+		object.updateVBO();
 		object.draw(shaderProgram.ID) ;
-		double crntTime = glfwGetTime();
+		// double crntTime = glfwGetTime();
 
 
 
@@ -155,11 +156,7 @@ int main()
 		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(groundModel));
 
 
-		// glm::mat4 model = glm::mat4(1.0f);
-		// model = glm::rotate(model, glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-		// int modelLoc = glGetUniformLocation(shaderProgram.ID, "model");
-		// glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-				// Handles camera inputs
+
 		camera.Inputs(window);
 		// Updates and exports the camera matrix to the Vertex Shader
 		camera.Matrix(45.0f, 0.1f, 100.0f, shaderProgram, "camMatrix");
@@ -170,35 +167,10 @@ int main()
 		popCat.Bind();
 		// Bind the VAO so OpenGL knows to use it
 		VAO1.Bind();
-		// Draw primitives, number of indices, datatype of indices, index of indices
+
 		glDrawElements(GL_TRIANGLES, sizeof(indices) / sizeof(int), GL_UNSIGNED_INT, 0);
-		// Swap the back buffer with the front buffer
-		// Take care of all GLFW events
+
 		glfwPollEvents();
-
-
-	// 	ImGui_ImplOpenGL3_NewFrame();
-    //     ImGui_ImplGlfw_NewFrame();
-    //     ImGui::NewFrame();
-
-
-	// 	ImGui::Begin("Control Window");
-    //     if (ImGui::Button("Increase")) {
-	// 			speed += 5.0f;
-			
-    //         std::cout << "Variable increased to: " << speed << std::endl;
-    //     }
-    //     if (ImGui::Button("Decrease")) {
-	// 		while (speed > 0.0f) {
-    //         speed -= 1.0f;
-	// 		}
-    //         std::cout << "Variable decreased to: " << speed << std::endl;
-    //     }
-    //     ImGui::Text("Current Variable: %.1f", speed);
-    //     ImGui::End();
-	
-	//  ImGui::Render();
-    //     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
 		glfwSwapBuffers(window);
 
