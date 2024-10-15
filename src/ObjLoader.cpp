@@ -3,88 +3,153 @@
 
 
 
-    void ObjLoader::loadOBJ(const std::string& filepath) {
-
- 
-      int faceCounter = 0; 
-        std::ifstream file(filepath);
-        if (!file.is_open()) {
-            std::cerr << "Could not open OBJ file: " << filepath << std::endl;
-            return;
-        }
-
-        std::string line;
-    std::cout << line << std::endl ;
-        while (std::getline(file, line)) {
-            std::istringstream iss(line);
-            std::string prefix;
-            iss >> prefix;
-
-            if (prefix == "v") {
-            glm::vec3 vertex;
-                iss >> vertex.x >> vertex.y >> vertex.z;
-// print the vertex variable
-            // vertices.push_back(vertex);
-            particles.push_back({ {vertex.x, vertex.y, vertex.z}, {0.0f, 0.0f, 0.0f}, 1.0f });  // Create particles with invMass
-            }
-            else if (prefix == "vt") {
-                glm::vec2 texCoord;
-                iss >> texCoord.x >> texCoord.y;
-                texCoords.push_back(texCoord);
-            }
-            // else if (prefix == "vn") {
-            //     glm::vec3 normal;
-            //     iss >> normal.x >> normal.y >> normal.z;
-            //     normals.push_back(normal);
-            // }
-            else if (prefix == "f") {
-            unsigned int vertexIndex[4], texCoordIndex[4], normalIndex[4]; // Arrays for indices
-            char slash;
-            for (int i = 0; i < 4; i++) {
-                iss >> vertexIndex[i] >> slash >> texCoordIndex[i] >> slash >> normalIndex[i];
-                // Store the vertex index in the indices array, converting to 0-based index
-                // indices.push_back(vertexIndex[i] - 1);
-            }
-                indices.push_back(vertexIndex[0] - 1);
-                indices.push_back(vertexIndex[1] - 1);
-                indices.push_back(vertexIndex[3] - 1);
-
-    // Triangle 2: v0, v2, v3
-                indices.push_back(vertexIndex[1] -1);
-                indices.push_back(vertexIndex[3] -1);
-                indices.push_back(vertexIndex[2] -1);
-
-
-            // Create edges for this face (3 unique edges for a triangular face)
-            addEdge(vertexIndex[0], vertexIndex[1], faceCounter);
-            addEdge(vertexIndex[1], vertexIndex[3], faceCounter);
-            addEdge(vertexIndex[0], vertexIndex[3], faceCounter);
-            std::array<unsigned int, 3> firstTriangle ={vertexIndex[0] , vertexIndex[1] , vertexIndex[3] } ; 
-            addFace(firstTriangle);
-            ++faceCounter;
-
-            addEdge(vertexIndex[1], vertexIndex[3], faceCounter);
-            addEdge(vertexIndex[1], vertexIndex[2], faceCounter);
-            addEdge(vertexIndex[2], vertexIndex[3], faceCounter);
-            std::array<unsigned int, 3> secondTriangle ={vertexIndex[1] , vertexIndex[3] , vertexIndex[2] } ;
-            addFace(secondTriangle);
-
-            // Check for a possible tetrahedron formation when an edge is shared
-            // checkForTetrahedron();
-            ++faceCounter;
-
-    std::cout <<  "v1 "<<vertexIndex[0] << "v2 "<<vertexIndex[1] <<"v3 "<<vertexIndex[2] <<"v4 "<<vertexIndex[3] << "nb faces " << faceCounter << std::endl ;
-
-        }
-        }
-        ObjLoader::findTetrahedrons();
-
+void ObjLoader::loadOBJ(const std::string& baseFilepath) {
+    // File paths
+    std::string nodeFile = baseFilepath + ".node";
+    std::string eleFile = baseFilepath + ".ele";
+    std::string edgeFile = baseFilepath + ".edge";  // New edge file
+    std::string faceFile = baseFilepath + ".face";  // Face file for surface mesh
+    
+    std::ifstream nodeStream(nodeFile);
+    std::ifstream eleStream(eleFile);
+    std::ifstream edgeStream(edgeFile);
+    std::ifstream faceStream(faceFile);
+    
+    if (!nodeStream.is_open()) {
+        std::cerr << "Could not open TetGen node file: " << nodeFile << std::endl;
+        return;
+    }
+    if (!eleStream.is_open()) {
+        std::cerr << "Could not open TetGen element file: " << eleFile << std::endl;
+        return;
+    }
+    if (!edgeStream.is_open()) {
+        std::cerr << "Could not open TetGen edge file: " << edgeFile << std::endl;
+        return;
+    }
+    if (!faceStream.is_open()) {
+        std::cerr << "Could not open TetGen face file: " << faceFile << std::endl;
+        return;
     }
 
+    // --- Read the .node file (particles: vertex positions) ---
+    std::string line;
+    int numVertices, dimensions, numAttributes, numBoundaryMarkers;
+    
+    std::getline(nodeStream, line);  // First line: number of vertices and file info
+    std::istringstream nodeHeader(line);
+    nodeHeader >> numVertices >> dimensions >> numAttributes >> numBoundaryMarkers;
 
-ObjLoader::ObjLoader(const std::string& filepath) {
+    for (int i = 0; i < numVertices; ++i) {
+        unsigned int index;
+        glm::vec3 vertex;
+        std::getline(nodeStream, line);
+        std::istringstream vertexStream(line);
+        vertexStream >> index >> vertex.x >> vertex.y >> vertex.z;
+
+        // Create particles with position, velocity, and inverse mass
+        particles.push_back({ vertex, glm::vec3(0.0f), 1.0f});
+        
+        // Generate spherical texture coordinates for the vertex
+        glm::vec2 texCoord = generateSphericalTexCoord(vertex);
+        texCoords.push_back(texCoord);
+        
+        std::cout << "Loaded Particle " << index << ": Position (" << vertex.x << ", " << vertex.y << ", " << vertex.z << "), TexCoord (" << texCoord.x << ", " << texCoord.y << ")" << std::endl;
+    }
+
+    // --- Read the .ele file (tetrahedrons) ---
+    int numTetrahedrons, pointsPerTet, numAttributesPerTet;
+    
+    std::getline(eleStream, line);  // First line: number of tetrahedrons and file info
+    std::istringstream eleHeader(line);
+    eleHeader >> numTetrahedrons >> pointsPerTet >> numAttributesPerTet;
+
+    if (pointsPerTet != 4) {
+        std::cerr << "Expected 4 vertices per tetrahedron, found: " << pointsPerTet << std::endl;
+        return;
+    }
+
+    for (int i = 0; i < numTetrahedrons; ++i) {
+        unsigned int index, v1, v2, v3, v4;
+        std::getline(eleStream, line);
+        std::istringstream tetStream(line);
+        tetStream >> index >> v1 >> v2 >> v3 >> v4;
+
+        // Add tetrahedron
+        std::array<unsigned int, 4> vertices = {v1, v2, v3, v4};  // Adjust to 0-based indexing
+        float volume = calculateTetrahedronVolume(particles[v1].position, particles[v2].position, particles[v3].position, particles[v4].position);
+        tetrahedrons.push_back(tetrahedron(vertices, volume));
+
+        std::cout << "Loaded Tetrahedron " << index << ": vertices (" << v1 << ", " << v2 << ", " << v3 << ", " << v4 << "), volume: " << volume << std::endl;
+    }
+
+    // --- Read the .edge file (edges) ---
+    int numEdges, boundaryMarkerFlag;
+    std::getline(edgeStream, line);  // First line: number of edges and file info
+    std::istringstream edgeHeader(line);
+    edgeHeader >> numEdges >> boundaryMarkerFlag;
+
+    for (int i = 0; i < numEdges; ++i) {
+        unsigned int index, v1, v2;
+        std::getline(edgeStream, line);
+        std::istringstream edgeStream(line);
+        edgeStream >> index >> v1 >> v2;
+
+        // Add edge
+        float restLength = glm::distance(particles[v1].position, particles[v2].position);  // Compute edge length
+        edges.insert(Edge(v1 , v2 , restLength));
+
+        std::cout << "Loaded Edge " << index << ": vertices (" << v1 << ", " << v2 << "), rest length: " << restLength << std::endl;
+    }
+
+    // --- Read the .face file (surface mesh) ---
+    int numFaces;
+    std::getline(faceStream, line);  // First line: number of faces and file info
+    std::istringstream faceHeader(line);
+    faceHeader >> numFaces;
+
+    for (int i = 0; i < numFaces; ++i) {
+        unsigned int index, v1, v2, v3;
+        std::getline(faceStream, line);
+        std::istringstream faceStream(line);
+        faceStream >> index >> v1 >> v2 >> v3;
+
+        indices.push_back(v1);
+        indices.push_back(v2);
+        indices.push_back(v3);
+
+        std::cout << "Loaded Face " << index << ": vertices (" << v1 << ", " << v2 << ", " << v3 << ")" << std::endl;
+    }
+
+    std::cout << "Mesh loading complete." << std::endl;
+}
+
+
+// Function to compute the volume of a tetrahedron given its 4 vertices
+float ObjLoader::calculateTetrahedronVolume(const glm::vec3& v1, const glm::vec3& v2, const glm::vec3& v3, const glm::vec3& v4) {
+    glm::vec3 vec1 = v1 - v4;
+    glm::vec3 vec2 = v2 - v4;
+    glm::vec3 vec3 = v3 - v4;
+    return std::abs(glm::dot(vec1, glm::cross(vec2, vec3)) / 6.0f);
+
+}
+
+
+glm::vec2 ObjLoader::generateSphericalTexCoord(const glm::vec3& vertex) {
+    // Normalize the vertex position
+    glm::vec3 normalizedPos = glm::normalize(vertex);
+
+    // Calculate spherical coordinates (longitude and latitude)
+    float u = 0.5f + (atan2(normalizedPos.z, normalizedPos.x) / (2.0f * M_PI));  // Longitude
+    float v = 0.5f - (asin(normalizedPos.y) / M_PI);  // Latitude
+
+    return glm::vec2(u, v);  // Return as texture coordinates
+}
+
+
+ObjLoader::ObjLoader(const std::string& baseFilepath) {
     // Load the OBJ and set up buffers
-    loadOBJ(filepath);
+    loadOBJ(baseFilepath);
     setupBuffers();
     
     // Initialize the object's position above the ground
@@ -169,19 +234,14 @@ void ObjLoader::draw(GLuint shaderProgram) {
 }
 
 void ObjLoader::updatePhysics(float deltaTime) {
-    glm::vec3 gravity = glm::vec3(0.0f, -9.81f, 0.0f);  // Gravity force pulling particles downwards
-
+    glm::vec3 gravity = glm::vec3(0.0f, -9.81f, 0.0f);  
 for (const Edge& edge : edges) {
+
     glm::vec3& pos1 = particles[edge.v1].position;
     glm::vec3& pos2 = particles[edge.v2].position;
-
+ 
     float currentLength = glm::distance(pos1, pos2);
     float stretch = currentLength - edge.restLen;
-
-    std::cout << "First particle pos: (" << pos1.x << ", " << pos1.y << ", " << pos1.z << ")" << std::endl;
-    std::cout << "Second particle pos: (" << pos2.x << ", " << pos2.y << ", " << pos2.z << ")" << std::endl;
-    std::cout << "Current Length: " << currentLength << ", Rest Length: " << edge.restLen << std::endl;
-    std::cout << "Stretch: " << stretch << std::endl;
 
     if (fabs(stretch) < 1e-4f) {
         std::cout << "Stretch is too small, skipping correction." << std::endl;
@@ -189,10 +249,10 @@ for (const Edge& edge : edges) {
     }
 
     glm::vec3 correctionDir = pos2 - pos1;
-    if (glm::length(correctionDir) < 1e-4f) {
-        std::cout << "Correction direction is too small, skipping correction." << std::endl;
-        continue;
-    }
+    // if (glm::length(correctionDir) < 1e-4f) {
+    //     std::cout << "Correction direction is too small, skipping correction." << std::endl;
+    //     continue;
+    // }
 
     correctionDir = glm::normalize(correctionDir);
     glm::vec3 correction = (stretch * correctionDir) / 2.0f;
@@ -213,56 +273,107 @@ for (const Edge& edge : edges) {
     particles[edge.v1].position += correction;
     particles[edge.v2].position -= correction;
 
-    // Print updated positions
-    std::cout << "Updated pos1: (" << particles[edge.v1].position.x << ", " 
-              << particles[edge.v1].position.y << ", " 
-              << particles[edge.v1].position.z << ")" << std::endl;
-    std::cout << "Updated pos2: (" << particles[edge.v2].position.x << ", " 
-              << particles[edge.v2].position.y << ", " 
-              << particles[edge.v2].position.z << ")" << std::endl;
+
 }
 
-//     // Step 2: Pre-solve Volume Constraints (for each tetrahedron)
-// for (tetrahedron& tetra : tetrahedrons) {
-//     glm::vec3& pos1 = particles[tetra.indices[0]].position;
-//     glm::vec3& pos2 = particles[tetra.indices[1]].position;
-//     glm::vec3& pos3 = particles[tetra.indices[2]].position;
-//     glm::vec3& pos4 = particles[tetra.indices[3]].position;
 
-//     float currentVolume = glm::dot(pos1 - pos4, glm::cross(pos2 - pos4, pos3 - pos4)) / 6.0f;
 
-//     // Check for degenerate tetrahedron
-//     if (currentVolume != 0.0f) {  // Avoid correcting tetrahedrons with zero volume
-//         float volumeError = currentVolume - tetra.restVolume;
-//         glm::vec3 centroid = (pos1 + pos2 + pos3 + pos4) / 4.0f;
 
-//         glm::vec3 correctionFactor = (volumeError / 4.0f) * glm::normalize(centroid);
+for (tetrahedron& tetra : tetrahedrons) {
+        glm::vec3& pos1 = particles[tetra.indices[0]].position;
+        glm::vec3& pos2 = particles[tetra.indices[1]].position; 
+        glm::vec3& pos3 = particles[tetra.indices[2]].position;
+        glm::vec3& pos4 = particles[tetra.indices[3]].position;
 
-//         particles[tetra.indices[0]].position += correctionFactor;
-//         particles[tetra.indices[1]].position += correctionFactor;
-//         particles[tetra.indices[2]].position += correctionFactor;
-//         particles[tetra.indices[3]].position += correctionFactor;
-//     }
-// }
+        // Calculate current volume using the determinant formula
+        float currentVolume = std::abs(glm::dot(pos1 - pos4, glm::cross(pos2 - pos4, pos3 - pos4))) / 6.0f;
 
-for (Particle& particle : particles) {
-        // Apply gravity to the particle's velocity
-        particle.velocity += 2.0f * gravity * deltaTime;
+        // Calculate the volume error relative to the rest volume
+        float volumeError = (currentVolume - tetra.restVolume);
 
-        // Update particle's position based on velocity
-        particle.position += particle.velocity * deltaTime;
+        // Compute gradients of the volume constraint with respect to each position
+        glm::vec3 grad_p1 = glm::cross(pos4 - pos2, pos3 - pos2);
+        glm::vec3 grad_p2 = glm::cross(pos3 - pos1, pos4 - pos1);
+        glm::vec3 grad_p3 = glm::cross(pos4 - pos1, pos2 - pos1);
+        glm::vec3 grad_p4 = glm::cross(pos2 - pos1, pos3 - pos1);
 
-        // Check for collision with the ground (y = groundLevel)
-        if (particle.position.y < this->groundLevel) {
-            // Handle ground collision: Reset position to ground level
-            particle.position.y = this->groundLevel;
+        // Compute individual particle corrections
+        float stiffness = 0.5e14f;  // Adjust this value for desired stiffness
+        float minDistance = 0.01f;  // Minimum distance between particles
 
-            // Reverse or dampen the velocity to simulate a bounce or friction
-            // You can tweak the restitution (bounce factor) to adjust the bounce behavior
-            float restitution = 0.5f;  // Adjust this value (between 0 and 1) for bounce effect
+        glm::vec3 correction_p1 = stiffness * grad_p1 / (glm::abs(glm::dot(grad_p1, grad_p1)) + minDistance);
+        glm::vec3 correction_p2 = stiffness * grad_p2 / (glm::abs(glm::dot(grad_p2, grad_p2)) + minDistance);
+        glm::vec3 correction_p3 = stiffness * grad_p3 / (glm::abs(glm::dot(grad_p3, grad_p3)) + minDistance);
+        glm::vec3 correction_p4 = stiffness * grad_p4 / (glm::abs(glm::dot(grad_p4, grad_p4)) + minDistance);
+
+        // Apply corrections with spatial relationship consideration
+        glm::vec3 avgCorrection = (correction_p1 + correction_p2 + correction_p3 + correction_p4) / 4.0f;
+        
+        // Normalize the average correction vector
+        glm::vec3 normalizedAvgCorrection = glm::normalize(avgCorrection);
+
+        // Calculate final corrections considering spatial relationships
+        float spatialFactor = 0.001f;  // Adjust based on tetrahedron orientation
+        glm::vec3 finalCorrection_p1 = normalizedAvgCorrection * glm::length(pos1 - pos4) * spatialFactor;
+        glm::vec3 finalCorrection_p2 = normalizedAvgCorrection * glm::length(pos2 - pos4) * spatialFactor;
+        glm::vec3 finalCorrection_p3 = normalizedAvgCorrection * glm::length(pos3 - pos4) * spatialFactor;
+        glm::vec3 finalCorrection_p4 = normalizedAvgCorrection * glm::length(pos4 - pos1) * spatialFactor;
+
+        // Clamp corrections to prevent excessive movement
+        const float MAX_CORRECTION = 1.0f;
+        finalCorrection_p1 = glm::clamp(finalCorrection_p1, -MAX_CORRECTION, MAX_CORRECTION);
+        finalCorrection_p2 = glm::clamp(finalCorrection_p2, -MAX_CORRECTION, MAX_CORRECTION);
+        finalCorrection_p3 = glm::clamp(finalCorrection_p3, -MAX_CORRECTION, MAX_CORRECTION);
+        finalCorrection_p4 = glm::clamp(finalCorrection_p4, -MAX_CORRECTION, MAX_CORRECTION);
+
+        // Apply corrections to particle positions
+        particles[tetra.indices[0]].position += finalCorrection_p1;
+        particles[tetra.indices[1]].position += finalCorrection_p2;
+        particles[tetra.indices[2]].position -= finalCorrection_p3;
+        particles[tetra.indices[3]].position -= finalCorrection_p4;
+
+        std::cout << "After update" << std::endl;
+        std::cout << pos1.x << ", " << pos1.y << ", " << pos1.z << std::endl;
+        std::cout << pos2.x << ", " << pos2.y << ", " << pos2.z << std::endl;
+        std::cout << pos3.x << ", " << pos3.y << ", " << pos3.z << std::endl;
+        std::cout << pos4.x << ", " << pos4.y << ", " << pos4.z << std::endl;
+}
+
+
+for (Particle& particle : particles) {  
+    // Apply gravity to the particle's velocity
+    particle.velocity +=  gravity * deltaTime;
+
+    // Update particle's position based on velocity
+    particle.position += particle.velocity * deltaTime;
+
+    // Check for collision with the ground (y = groundLevel)
+    if (particle.position.y < this->groundLevel) {
+        // Handle ground collision: Reset position to ground level
+        particle.position.y = this->groundLevel;
+
+        float restitution = 0.5f;  // Adjust this value (between 0 and 1) for bounce effect
+
+        // If the vertical velocity is below a small threshold, stop the particle
+        if (fabs(particle.velocity.y) < 0.1f) {
+            particle.velocity.y = 0.0f;  // Stop bouncing in the y-axis
+        } else {
             particle.velocity.y *= -restitution;  // Reverse y-velocity with damping
         }
+
+        // Apply friction to the horizontal movement (x, z)
+        // float friction = 0.95f;  // Friction factor to slow down horizontal movement
+        // particle.velocity.x *= friction;
+        // particle.velocity.z *= friction;
+
+        // If horizontal velocity is very small, stop the particle
+        if (glm::length(glm::vec2(particle.velocity.x, particle.velocity.z)) < 0.5f) {
+            particle.velocity.x = 0.0f;
+            particle.velocity.z = 0.0f;
+        }
     }
+}
+
 
 }
 
@@ -292,26 +403,6 @@ for (Particle& particle : particles) {
     }
 
 
-float ObjLoader::calculateTetrahedronVolume(const std::array<unsigned int, 4>& tetraVertices) {
-    glm::vec3 v0 = particles[tetraVertices[0]].position;
-    glm::vec3 v1 = particles[tetraVertices[1]].position;
-    glm::vec3 v2 = particles[tetraVertices[2]].position;
-    glm::vec3 v3 = particles[tetraVertices[3]].position;
-
-    // Compute the vectors for three edges
-    glm::vec3 vec1 = v1 - v0;
-    glm::vec3 vec2 = v2 - v0;
-    glm::vec3 vec3 = v3 - v0;
-
-    // Calculate the volume using the scalar triple product
-    float volume = glm::dot(vec1, glm::cross(vec2, vec3)) / 6.0f;
-
-    return std::abs(volume);  // Return the absolute value of the volume
-}
-
-
-
-
 
 void ObjLoader::addEdge( unsigned int v1, unsigned int v2, int face) {
     glm::vec3 vertex1 = particles[v1].position;
@@ -327,51 +418,6 @@ void ObjLoader::addEdge( unsigned int v1, unsigned int v2, int face) {
     } 
 }
 
-
-void ObjLoader::findTetrahedrons() {
-    for (int i = 0; i < faces.size(); ++i) {
-        const Face& face = faces[i];
-
-        // Check if the face has at least two adjacent faces
-        if (face.adjacentFaces.size() >= 2) {
-            for (int j = 0; j < face.adjacentFaces.size(); ++j) {
-                for (int k = j + 1; k < face.adjacentFaces.size(); ++k) {
-                    const Face& adjFace1 = faces[face.adjacentFaces[j]];
-                    const Face& adjFace2 = faces[face.adjacentFaces[k]];
-
-                    // Check if the two adjacent faces are also adjacent to each other
-                    if (adjFace1.isAdjacentTo(adjFace2)) {
-                        // We've found a set of faces that form a tetrahedron
-                        std::set<unsigned int> uniqueVertices;
-                        uniqueVertices.insert(face.vertices.begin(), face.vertices.end());
-                        uniqueVertices.insert(adjFace1.vertices.begin(), adjFace1.vertices.end());
-                        uniqueVertices.insert(adjFace2.vertices.begin(), adjFace2.vertices.end());
-
-                        // If there are exactly 4 unique vertices, we have a tetrahedron
-                        if (uniqueVertices.size() == 4) {
-                            // Convert the set to an array for easy handling
-                            std::array<unsigned int, 4> tetraVertices;
-                            std::copy(uniqueVertices.begin(), uniqueVertices.end(), tetraVertices.begin());
-
-                            // Calculate the rest volume of the tetrahedron
-                            float restVolume = calculateTetrahedronVolume(tetraVertices);
-
-                            // Create and store the tetrahedron
-                            tetrahedrons.push_back(tetrahedron(tetraVertices, restVolume));
-
-                            // Output for debugging
-                            std::cout << "Tetrahedron found with vertices: ";
-                            for (unsigned int v : tetraVertices) {
-                                std::cout << v << " ";
-                            }
-                            std::cout << " and volume: " << restVolume << std::endl;
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
 
 
@@ -434,31 +480,4 @@ void ObjLoader::findTetrahedrons() {
 
 
 
-void ObjLoader::addFace(const std::array<unsigned int, 3>& vertices) {
-    glm::vec3 vertex1 = this->particles[vertices[0]].position;
-    glm::vec3 vertex2 = this->particles[vertices[1]].position;
-    glm::vec3 vertex3 = this->particles[vertices[2]].position;
 
-    float restLen1 = glm::distance(vertex1, vertex2);
-    float restLen2 = glm::distance(vertex2, vertex3);
-    float restLen3 = glm::distance(vertex3, vertex1);
-
-    // Create the edges with their respective rest lengths
-    std::vector<Edge> faceEdges = {
-        Edge(vertices[0], vertices[1], restLen1),
-        Edge(vertices[1], vertices[2], restLen2),
-        Edge(vertices[2], vertices[0], restLen3)
-    };
-    Face newFace(vertices, faceEdges);
-
-    // Check for adjacency with previously added faces
-    for (int i = 0; i < faces.size(); ++i) {
-        if (newFace.isAdjacentTo(faces[i])) {
-            newFace.addAdjacentFace(i);
-            faces[i].addAdjacentFace(faces.size());  // Mutual adjacency
-        }
-    }
-
-    // Add the new face to the list of faces
-    faces.push_back(newFace);
-}

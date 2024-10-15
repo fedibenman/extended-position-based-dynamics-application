@@ -12,7 +12,7 @@
 #include <set>
 #include <map>
 #include <array>
-struct Particle{
+struct Particle {
 glm::vec3  position ;
 glm::vec3 velocity ; 
 float invMass ; 
@@ -34,34 +34,11 @@ struct Edge {
         return std::tie(v1, v2) < std::tie(other.v1, other.v2);
     }
 };
-struct Face {
-    std::array<unsigned int, 3> vertices;  // Vertices defining the triangular face
-    std::vector<Edge> edges;               // Edges of the face
-    std::vector<int> adjacentFaces;        // Indices of adjacent faces
 
-    Face(const std::array<unsigned int, 3>& verts, const std::vector<Edge>& edgeList)
-        : vertices(verts), edges(edgeList) {}
-
-    // Add an adjacent face
-    void addAdjacentFace(int faceIndex) {
-        adjacentFaces.push_back(faceIndex);
-    }
-
-    // Check if this face shares an edge with another face
-    bool isAdjacentTo(const Face& otherFace) const {
-        for (const Edge& edge : edges) {
-            for (const Edge& otherEdge : otherFace.edges) {
-                if (edge == otherEdge) {
-                    return true;  // They share an edge
-                }
-            }
-        }
-        return false;
-    }
-};
 struct tetrahedron{
     unsigned int indices[4] ; 
     float restVolume ; 
+    float compliance = 0.2e-7f; //tendon compliance
 
         tetrahedron(const std::array<unsigned int, 4>& vertices, float volume) {
         std::copy(vertices.begin(), vertices.end(), indices);
@@ -78,15 +55,14 @@ class ObjLoader {
     std::vector<Particle> particles;
     std::set<Edge> edges;
     std::vector<tetrahedron> tetrahedrons;
-    std::vector<Face> faces;
     float gravity = -9.81f; // Gravity constant
-    float groundLevel = 0.0f; // Height of the flat surface (y = 0)
+    float groundLevel = -5.0f; // Height of the flat surface (y = 0)
 
 
     // static const float gravity = -9.81f; // Gravity constant
 
     GLuint VBO, VAO, EBO;
-ObjLoader(const std::string& filepath) ;  
+ObjLoader(const std::string& baseFilepath) ;  
 void loadOBJ(const std::string& filepath)  ; 
 
 void setupBuffers() ; 
@@ -97,7 +73,8 @@ void updatePhysics(float deltaTime) ;
  
  void deleteBuffers() ;
 
- float calculateTetrahedronVolume(const std::array<unsigned int, 4>& tetraVertices) ;
+float calculateTetrahedronVolume(const glm::vec3& v1, const glm::vec3& v2, const glm::vec3& v3, const glm::vec3& v4) ;
+glm::vec2  generateSphericalTexCoord(const glm::vec3& vertex) ;
  void  createEdges(unsigned int vertexIndex[4])  ;
 void addEdge( unsigned int v1, unsigned int v2, int face) ;
 void findTetrahedrons() ;

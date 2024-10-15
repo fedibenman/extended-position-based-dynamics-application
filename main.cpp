@@ -118,18 +118,18 @@ int main()
 	Texture popCat("texture.jpg", GL_TEXTURE_2D, GL_TEXTURE0, GL_RGBA, GL_UNSIGNED_BYTE);
 	popCat.texUnit(shaderProgram, "tex0", 0);
 
-	ObjLoader object("complexTetrahedral.obj");
+	ObjLoader object("teapot/ascii_teapot.1");
 
 	// Original code from the tutorial
 	/*Texture popCat("pop_cat.png", GL_TEXTURE_2D, GL_TEXTURE0, GL_RGBA, GL_UNSIGNED_BYTE);
 	popCat.texUnit(shaderProgram, "tex0", 0);*/
-	const float deltaTime = 1.0f / 60.0f;
+	const float deltaTime =0.05f;
 	// float lastFrame = 0.0f;
 	glEnable(GL_DEPTH_TEST);
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 130");
 
-	Camera camera(width, height, glm::vec3(0.0f, 5.0f, 15.0f)); 
+	Camera camera(width, height, glm::vec3(0.0f, 5.0f, 25.0f)); 
 	// Main while loop
 	while (!glfwWindowShouldClose(window))
 	{
