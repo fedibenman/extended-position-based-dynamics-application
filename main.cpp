@@ -71,10 +71,12 @@ int main()
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1); // Enable vsync
 
-	 IMGUI_CHECKVERSION();
+IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     ImGui::StyleColorsDark();
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init("#version 330");
 
 
 	//Load GLAD so it configures OpenGL
@@ -126,14 +128,24 @@ int main()
 	const float deltaTime =0.05f;
 	// float lastFrame = 0.0f;
 	glEnable(GL_DEPTH_TEST);
-	ImGui_ImplGlfw_InitForOpenGL(window, true);
-    ImGui_ImplOpenGL3_Init("#version 130");
+
 
 	Camera camera(width, height, glm::vec3(0.0f, 5.0f, 25.0f)); 
 	// Main while loop
 	while (!glfwWindowShouldClose(window))
 	{
 		float currentFrame = glfwGetTime();
+		ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+		ImGui::Begin("Control Panel");
+        if (ImGui::Button("Reset Object")) {
+         object.deleteBuffers();
+		 object = ObjLoader("teapot/ascii_teapot.1");
+
+        }
+        ImGui::End();
     	// deltaTime = currentFrame - lastFrame;
     	// lastFrame = currentFrame;
 		// Specify the color of the background
@@ -171,22 +183,23 @@ int main()
 		glDrawElements(GL_TRIANGLES, sizeof(indices) / sizeof(int), GL_UNSIGNED_INT, 0);
 
 		glfwPollEvents();
-
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 		glfwSwapBuffers(window);
 
 	}
 
-	// Delete all the objects we've created
-	VAO1.Delete();
-	VBO1.Delete();
-	EBO1.Delete();
-	object.deleteBuffers() ;
-	popCat.Delete();
-	shaderProgram.Delete();
-	// Delete window before ending the program
-	glfwDestroyWindow(window);
-	// Terminate GLFW before ending the program
-	glfwTerminate();
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+    VAO1.Delete();
+    VBO1.Delete();
+    EBO1.Delete();
+    object.deleteBuffers();
+    popCat.Delete();
+    shaderProgram.Delete();
+    glfwDestroyWindow(window);
+    glfwTerminate();
 	return 0;
 }
 

@@ -48,7 +48,7 @@ void ObjLoader::loadOBJ(const std::string& baseFilepath) {
         vertexStream >> index >> vertex.x >> vertex.y >> vertex.z;
 
         // Create particles with position, velocity, and inverse mass
-        particles.push_back({ vertex, glm::vec3(0.0f), 1.0f});
+        particles.push_back({ vertex, glm::vec3(0.0f)});
         
         // Generate spherical texture coordinates for the vertex
         glm::vec2 texCoord = generateSphericalTexCoord(vertex);
@@ -235,148 +235,108 @@ void ObjLoader::draw(GLuint shaderProgram) {
 
 void ObjLoader::updatePhysics(float deltaTime) {
     glm::vec3 gravity = glm::vec3(0.0f, -9.81f, 0.0f);  
-for (const Edge& edge : edges) {
+    const int substeps = 12;  // Number of substeps for stability
+    float substepDeltaTime = deltaTime / substeps;
 
-    glm::vec3& pos1 = particles[edge.v1].position;
-    glm::vec3& pos2 = particles[edge.v2].position;
- 
-    float currentLength = glm::distance(pos1, pos2);
-    float stretch = currentLength - edge.restLen;
+    // Damping factor for velocity to reduce jittering over time
+    const float DAMPING_FACTOR = this->damping;  // Adjust this for how quickly the movement slows
 
-    if (fabs(stretch) < 1e-4f) {
-        std::cout << "Stretch is too small, skipping correction." << std::endl;
-        continue;
-    }
+    for (int i = 0; i < substeps; ++i) {
+        // Apply gravity and update particle positions with damping
+        for (Particle& particle : particles) {
+            // Update velocity with gravity
+            particle.velocity += gravity * substepDeltaTime;
 
-    glm::vec3 correctionDir = pos2 - pos1;
-    // if (glm::length(correctionDir) < 1e-4f) {
-    //     std::cout << "Correction direction is too small, skipping correction." << std::endl;
-    //     continue;
-    // }
+            // Apply damping to slow down the velocity over time
+            particle.velocity *= DAMPING_FACTOR;
 
-    correctionDir = glm::normalize(correctionDir);
-    glm::vec3 correction = (stretch * correctionDir) / 2.0f;
+            // Update the particle's position based on its velocity
+            particle.position += particle.velocity * substepDeltaTime;
 
-    // Check for NaN
-    if (std::isnan(correction.x) || std::isnan(correction.y) || std::isnan(correction.z) ||
-        std::isnan(pos1.x) || std::isnan(pos1.y) || std::isnan(pos1.z) ||
-        std::isnan(pos2.x) || std::isnan(pos2.y) || std::isnan(pos2.z)) {
-        std::cerr << "NaN detected in correction or particle positions!\n";
-        continue;  // Skip this iteration
-    }
+            // Ground collision handling
+            if (particle.position.y < this->groundLevel) {
+                particle.position.y = this->groundLevel;
 
-    // Cap the correction
-    const float MAX_CORRECTION = 0.1f;  // Example maximum correction
-    correction = glm::clamp(correction, -MAX_CORRECTION, MAX_CORRECTION);
+                float restitution = 0.5f;
+                if (fabs(particle.velocity.y) < 0.1f) {
+                    particle.velocity.y = 0.0f;  // Stop vertical bouncing if very low
+                } else {
+                    particle.velocity.y *= -restitution;  // Reverse with damping on collision
+                }
 
-    // Apply the correction to particle positions
-    particles[edge.v1].position += correction;
-    particles[edge.v2].position -= correction;
-
-
-}
-
-
-
-
-for (tetrahedron& tetra : tetrahedrons) {
-        glm::vec3& pos1 = particles[tetra.indices[0]].position;
-        glm::vec3& pos2 = particles[tetra.indices[1]].position; 
-        glm::vec3& pos3 = particles[tetra.indices[2]].position;
-        glm::vec3& pos4 = particles[tetra.indices[3]].position;
-
-        // Calculate current volume using the determinant formula
-        float currentVolume = std::abs(glm::dot(pos1 - pos4, glm::cross(pos2 - pos4, pos3 - pos4))) / 6.0f;
-
-        // Calculate the volume error relative to the rest volume
-        float volumeError = (currentVolume - tetra.restVolume);
-
-        // Compute gradients of the volume constraint with respect to each position
-        glm::vec3 grad_p1 = glm::cross(pos4 - pos2, pos3 - pos2);
-        glm::vec3 grad_p2 = glm::cross(pos3 - pos1, pos4 - pos1);
-        glm::vec3 grad_p3 = glm::cross(pos4 - pos1, pos2 - pos1);
-        glm::vec3 grad_p4 = glm::cross(pos2 - pos1, pos3 - pos1);
-
-        // Compute individual particle corrections
-        float stiffness = 0.5e14f;  // Adjust this value for desired stiffness
-        float minDistance = 0.01f;  // Minimum distance between particles
-
-        glm::vec3 correction_p1 = stiffness * grad_p1 / (glm::abs(glm::dot(grad_p1, grad_p1)) + minDistance);
-        glm::vec3 correction_p2 = stiffness * grad_p2 / (glm::abs(glm::dot(grad_p2, grad_p2)) + minDistance);
-        glm::vec3 correction_p3 = stiffness * grad_p3 / (glm::abs(glm::dot(grad_p3, grad_p3)) + minDistance);
-        glm::vec3 correction_p4 = stiffness * grad_p4 / (glm::abs(glm::dot(grad_p4, grad_p4)) + minDistance);
-
-        // Apply corrections with spatial relationship consideration
-        glm::vec3 avgCorrection = (correction_p1 + correction_p2 + correction_p3 + correction_p4) / 4.0f;
-        
-        // Normalize the average correction vector
-        glm::vec3 normalizedAvgCorrection = glm::normalize(avgCorrection);
-
-        // Calculate final corrections considering spatial relationships
-        float spatialFactor = 0.001f;  // Adjust based on tetrahedron orientation
-        glm::vec3 finalCorrection_p1 = normalizedAvgCorrection * glm::length(pos1 - pos4) * spatialFactor;
-        glm::vec3 finalCorrection_p2 = normalizedAvgCorrection * glm::length(pos2 - pos4) * spatialFactor;
-        glm::vec3 finalCorrection_p3 = normalizedAvgCorrection * glm::length(pos3 - pos4) * spatialFactor;
-        glm::vec3 finalCorrection_p4 = normalizedAvgCorrection * glm::length(pos4 - pos1) * spatialFactor;
-
-        // Clamp corrections to prevent excessive movement
-        const float MAX_CORRECTION = 1.0f;
-        finalCorrection_p1 = glm::clamp(finalCorrection_p1, -MAX_CORRECTION, MAX_CORRECTION);
-        finalCorrection_p2 = glm::clamp(finalCorrection_p2, -MAX_CORRECTION, MAX_CORRECTION);
-        finalCorrection_p3 = glm::clamp(finalCorrection_p3, -MAX_CORRECTION, MAX_CORRECTION);
-        finalCorrection_p4 = glm::clamp(finalCorrection_p4, -MAX_CORRECTION, MAX_CORRECTION);
-
-        // Apply corrections to particle positions
-        particles[tetra.indices[0]].position += finalCorrection_p1;
-        particles[tetra.indices[1]].position += finalCorrection_p2;
-        particles[tetra.indices[2]].position -= finalCorrection_p3;
-        particles[tetra.indices[3]].position -= finalCorrection_p4;
-
-        std::cout << "After update" << std::endl;
-        std::cout << pos1.x << ", " << pos1.y << ", " << pos1.z << std::endl;
-        std::cout << pos2.x << ", " << pos2.y << ", " << pos2.z << std::endl;
-        std::cout << pos3.x << ", " << pos3.y << ", " << pos3.z << std::endl;
-        std::cout << pos4.x << ", " << pos4.y << ", " << pos4.z << std::endl;
-}
-
-
-for (Particle& particle : particles) {  
-    // Apply gravity to the particle's velocity
-    particle.velocity +=  gravity * deltaTime;
-
-    // Update particle's position based on velocity
-    particle.position += particle.velocity * deltaTime;
-
-    // Check for collision with the ground (y = groundLevel)
-    if (particle.position.y < this->groundLevel) {
-        // Handle ground collision: Reset position to ground level
-        particle.position.y = this->groundLevel;
-
-        float restitution = 0.5f;  // Adjust this value (between 0 and 1) for bounce effect
-
-        // If the vertical velocity is below a small threshold, stop the particle
-        if (fabs(particle.velocity.y) < 0.1f) {
-            particle.velocity.y = 0.0f;  // Stop bouncing in the y-axis
-        } else {
-            particle.velocity.y *= -restitution;  // Reverse y-velocity with damping
+                // Apply damping to horizontal movement (x, z) to reduce sliding
+                const float horizontalDamping = 0.95f;
+                particle.velocity.x *= horizontalDamping;
+                particle.velocity.z *= horizontalDamping;
+            }
         }
 
-        // Apply friction to the horizontal movement (x, z)
-        // float friction = 0.95f;  // Friction factor to slow down horizontal movement
-        // particle.velocity.x *= friction;
-        // particle.velocity.z *= friction;
+        // Stretch Constraints for edges
+        for (const Edge& edge : edges) {
+            glm::vec3& pos1 = particles[edge.v1].position;
+            glm::vec3& pos2 = particles[edge.v2].position;
 
-        // If horizontal velocity is very small, stop the particle
-        if (glm::length(glm::vec2(particle.velocity.x, particle.velocity.z)) < 0.5f) {
-            particle.velocity.x = 0.0f;
-            particle.velocity.z = 0.0f;
+            float currentLength = glm::distance(pos1, pos2);
+            float stretch = currentLength - edge.restLen;
+
+            if (fabs(stretch) < 1e-4f) continue;
+
+            glm::vec3 correctionDir = glm::normalize(pos2 - pos1);
+            glm::vec3 correction = (stretch * correctionDir) / 2.0f;
+
+            const float MAX_CORRECTION = this->max_stretch_correction;
+            correction = glm::clamp(correction, -MAX_CORRECTION, MAX_CORRECTION);
+
+            // Apply the corrections to particle positions
+            pos1 += correction;
+            pos2 -= correction;
+        }
+
+        // Volume Constraints for tetrahedrons using XPBD
+        for (tetrahedron& tetra : tetrahedrons) {
+            glm::vec3& p1 = particles[tetra.indices[0]].position;
+            glm::vec3& p2 = particles[tetra.indices[1]].position;
+            glm::vec3& p3 = particles[tetra.indices[2]].position;
+            glm::vec3& p4 = particles[tetra.indices[3]].position;
+
+            // Calculate the current volume of the tetrahedron
+            float currentVolume = glm::dot(glm::cross(p2 - p1, p3 - p1), p4 - p1) / 6.0f;
+            float restVolume = tetra.restVolume;
+            float volumeDifference = currentVolume - restVolume;
+
+            if (fabs(volumeDifference) < 1e-4f) continue;
+
+            // Compute the gradients of the volume constraint with respect to each vertex
+            glm::vec3 grad1 = glm::cross(p2 - p3, p4 - p3) / 6.0f;
+            glm::vec3 grad2 = glm::cross(p3 - p1, p4 - p1) / 6.0f;
+            glm::vec3 grad3 = glm::cross(p1 - p2, p4 - p2) / 6.0f;
+            glm::vec3 grad4 = glm::cross(p2 - p1, p3 - p1) / 6.0f;
+
+            // Compute the sum of squared gradients
+            float sumGradSquared = glm::dot(grad1, grad1) + glm::dot(grad2, grad2) + 
+                                   glm::dot(grad3, grad3) + glm::dot(grad4, grad4);
+
+            if (sumGradSquared < 1e-6f) continue;
+
+            // Compute the correction using XPBD
+            float compliance = this->compliance;
+            float lambda = volumeDifference / (sumGradSquared + compliance / substepDeltaTime);
+
+            // Apply the correction to each vertex, limiting the maximum change per update
+            const float MAX_VOLUME_CORRECTION = this->max_volume_correction;
+            glm::vec3 correction1 = glm::clamp(-lambda * grad1, -MAX_VOLUME_CORRECTION, MAX_VOLUME_CORRECTION);
+            glm::vec3 correction2 = glm::clamp(-lambda * grad2, -MAX_VOLUME_CORRECTION, MAX_VOLUME_CORRECTION);
+            glm::vec3 correction3 = glm::clamp(-lambda * grad3, -MAX_VOLUME_CORRECTION, MAX_VOLUME_CORRECTION);
+            glm::vec3 correction4 = glm::clamp(-lambda * grad4, -MAX_VOLUME_CORRECTION, MAX_VOLUME_CORRECTION);
+
+            // Apply the capped corrections to the positions
+            p1 += correction1;
+            p2 += correction2;
+            p3 += correction3;
+            p4 += correction4;
         }
     }
 }
-
-
-}
-
 
 
 

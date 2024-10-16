@@ -15,7 +15,6 @@
 struct Particle {
 glm::vec3  position ;
 glm::vec3 velocity ; 
-float invMass ; 
 }; 
 
 struct Edge {
@@ -38,7 +37,7 @@ struct Edge {
 struct tetrahedron{
     unsigned int indices[4] ; 
     float restVolume ; 
-    float compliance = 0.2e-7f; //tendon compliance
+    float stiffness = 0.5e7f; //tendon compliance
 
         tetrahedron(const std::array<unsigned int, 4>& vertices, float volume) {
         std::copy(vertices.begin(), vertices.end(), indices);
@@ -55,6 +54,11 @@ class ObjLoader {
     std::vector<Particle> particles;
     std::set<Edge> edges;
     std::vector<tetrahedron> tetrahedrons;
+    float compliance = 0.0f ; 
+    float invMass = 1.0f;
+    float damping = 0.95f;
+    float max_stretch_correction = 0.01f;
+    float max_volume_correction = 0.6f ; 
     float gravity = -9.81f; // Gravity constant
     float groundLevel = -5.0f; // Height of the flat surface (y = 0)
 
