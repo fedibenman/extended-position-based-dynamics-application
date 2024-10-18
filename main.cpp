@@ -125,11 +125,11 @@ IMGUI_CHECKVERSION();
 	// Original code from the tutorial
 	/*Texture popCat("pop_cat.png", GL_TEXTURE_2D, GL_TEXTURE0, GL_RGBA, GL_UNSIGNED_BYTE);
 	popCat.texUnit(shaderProgram, "tex0", 0);*/
-	const float deltaTime =0.05f;
+	const float deltaTime =0.09f;
 	// float lastFrame = 0.0f;
 	glEnable(GL_DEPTH_TEST);
-
-
+	int exponent = 5;
+	float currentCompliance = 0.0f;
 	Camera camera(width, height, glm::vec3(0.0f, 5.0f, 25.0f)); 
 	// Main while loop
 	while (!glfwWindowShouldClose(window))
@@ -140,12 +140,20 @@ IMGUI_CHECKVERSION();
         ImGui::NewFrame();
 
 		ImGui::Begin("Control Panel");
-        if (ImGui::Button("Reset Object")) {
-         object.deleteBuffers();
-		 object = ObjLoader("teapot/ascii_teapot.1");
 
-        }
-        ImGui::End();
+ ImGui::SliderInt("Compliance (10^x)", &exponent, 0, 15);
+ currentCompliance = pow(10.0f, -exponent);
+object.compliance = currentCompliance;
+ImGui::Text("Current Compliance: %.8f", currentCompliance);
+
+    // Button to reset the object
+    if (ImGui::Button("Reset Object")) {
+        object.deleteBuffers();
+        object = ObjLoader("teapot/ascii_teapot.1");
+    }
+
+    ImGui::End();
+
     	// deltaTime = currentFrame - lastFrame;
     	// lastFrame = currentFrame;
 		// Specify the color of the background
@@ -169,7 +177,7 @@ IMGUI_CHECKVERSION();
 
 
 
-		camera.Inputs(window);
+		// camera.Inputs(window);
 		// Updates and exports the camera matrix to the Vertex Shader
 		camera.Matrix(45.0f, 0.1f, 100.0f, shaderProgram, "camMatrix");
 
