@@ -1,0 +1,1 @@
+an application of the extend position dynamics methode using c++ as the programming language ,glm for mathematic calculation,glfw for windows,since my main objective was to apply the xpbd aspect of it ,for further not the volume constraints would be fixed further on.
